@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>AI产业链股票池</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23192329'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-family='Arial,sans-serif' font-size='22' font-weight='700' fill='%23f29a70'%3EAI%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="https://unpkg.com/lucide@0.475.0/dist/umd/lucide.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand-mark" aria-hidden="true">AI</div>
+          <div>
+            <h1>AI产业链股票池</h1>
+            <p>美股 · A股映射 · 产业位置 · 研究关联</p>
+          </div>
+        </div>
+        <nav class="topbar-nav" aria-label="站点导航">
+          <a class="topbar-nav-link" href="#policyView" data-open-view="policyView">
+            <i data-lucide="activity" aria-hidden="true"></i>
+            <span>政策压力站</span>
+          </a>
+          <a class="topbar-nav-link" href="https://mastersgo.cc">
+            <i data-lucide="pickaxe" aria-hidden="true"></i>
+            <span>挖掘机</span>
+          </a>
+        </nav>
+        <div class="topbar-meta">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span id="connectionStatus">行情未连接</span>
+          <strong id="marketAsOf">--:--</strong>
+          <button id="refreshQuotes" class="topbar-refresh" type="button" title="刷新行情" aria-label="刷新行情">
+            <i data-lucide="refresh-cw" aria-hidden="true"></i>
+          </button>
+        </div>
+      </header>
+
+      <div class="workbench">
+        <aside class="filter-panel" aria-label="股票池筛选">
+          <div class="search-row">
+            <i data-lucide="search" aria-hidden="true"></i>
+            <input id="searchInput" type="search" placeholder="代码、公司、定位" autocomplete="off" />
+            <button id="resetButton" class="icon-button" type="button" title="重置筛选" aria-label="重置筛选">
+              <i data-lucide="rotate-ccw" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <section class="filter-group market-group">
+            <h2>市场</h2>
+            <div id="marketFilter" class="segmented market-segmented" role="group" aria-label="市场">
+              <button type="button" class="is-active" data-value="全部">全部</button>
+              <button type="button" data-value="美股">美股</button>
+              <button type="button" data-value="A股">A股</button>
+            </div>
+          </section>
+
+          <section class="filter-group">
+            <h2>产业链位置</h2>
+            <div id="layerFilter" class="segmented" role="group" aria-label="产业链位置">
+              <button type="button" class="is-active" data-value="全部">全部</button>
+              <button type="button" data-value="上游">上游</button>
+              <button type="button" data-value="中游">中游</button>
+              <button type="button" data-value="下游">下游</button>
+            </div>
+          </section>
+
+          <section class="filter-group sector-group">
+            <div class="filter-heading">
+              <h2>板块</h2>
+              <span id="sectorCount">16</span>
+            </div>
+            <div id="sectorFilters" class="sector-filters"></div>
+          </section>
+
+          <section class="filter-group">
+            <h2>研究状态</h2>
+            <div id="statusFilter" class="status-filter"></div>
+          </section>
+
+          <div class="source-block">
+            <span>来源</span>
+            <p>美股研究池、过往个股分析及 A 股产业链映射池</p>
+          </div>
+        </aside>
+
+        <main class="main-panel">
+          <section class="summary-strip" aria-label="股票池摘要">
+            <div class="summary-item">
+              <span>当前标的</span>
+              <strong id="visibleMetric">--</strong>
+            </div>
+            <div class="summary-item">
+              <span>行情覆盖</span>
+              <strong id="sectorMetric">--</strong>
+            </div>
+            <div class="summary-item">
+              <span>上涨标的</span>
+              <strong id="analyzedMetric">--</strong>
+            </div>
+            <div class="summary-item accent">
+              <span>下跌标的</span>
+              <strong id="relationMetric">--</strong>
+            </div>
+          </section>
+
+          <section id="decisionPanel" class="decision-panel" aria-label="今日决策面板">
+            <div class="decision-loading">今日决策面板加载中</div>
+          </section>
+
+          <div class="view-bar">
+            <nav class="view-tabs" aria-label="信息视图">
+              <button type="button" class="is-active" data-view="graphView">
+                <i data-lucide="network" aria-hidden="true"></i><span>关联图谱</span>
+              </button>
+              <button type="button" data-view="matrixView">
+                <i data-lucide="table-2" aria-hidden="true"></i><span>特征矩阵</span>
+              </button>
+              <button type="button" data-view="listView">
+                <i data-lucide="columns-3" aria-hidden="true"></i><span>股票列表</span>
+              </button>
+              <button type="button" data-view="discoveryView">
+                <i data-lucide="radar" aria-hidden="true"></i><span>主动发现</span>
+              </button>
+              <button type="button" data-view="policyView">
+                <i data-lucide="activity" aria-hidden="true"></i><span>政策压力</span>
+              </button>
+            </nav>
+            <div class="visible-label">显示 <strong id="visibleCount">--</strong> / <span id="totalCount">--</span></div>
+          </div>
+
+          <section id="graphView" class="content-view is-active" aria-label="关联图谱">
+            <div class="graph-layout">
+              <div class="graph-pane">
+                <div class="graph-toolbar">
+                  <div id="relationFilter" class="relation-filter" role="group" aria-label="关系类型">
+                    <button type="button" class="is-active" data-value="全部">全部关系</button>
+                    <button type="button" data-value="产业链">产业链</button>
+                    <button type="button" data-value="资本开支">资本开支</button>
+                    <button type="button" data-value="电力映射">电力映射</button>
+                    <button type="button" data-value="主题关联">主题关联</button>
+                    <button type="button" data-value="A股映射">A股映射</button>
+                  </div>
+                  <div id="graphFocusFilter" class="graph-focus-filter" role="group" aria-label="主题速筛">
+                    <button type="button" class="is-active" data-value="全部">全部主题</button>
+                    <button type="button" data-value="HBM/存储">HBM/存储</button>
+                    <button type="button" data-value="CPO/光互联">CPO/光互联</button>
+                    <button type="button" data-value="电力/液冷">电力/液冷</button>
+                    <button type="button" data-value="先进封装">先进封装</button>
+                    <button type="button" data-value="机器人">机器人</button>
+                  </div>
+                  <div id="graphModeFilter" class="graph-mode-filter" role="group" aria-label="图谱降噪">
+                    <button type="button" class="is-active" data-value="全部">全部图</button>
+                    <button type="button" data-value="一度关系">一度关系</button>
+                    <button type="button" data-value="隐藏弱关系">隐藏弱关系</button>
+                  </div>
+                </div>
+
+                <div class="network-stage" id="networkStage" tabindex="0" aria-label="关系图谱画布，支持滚轮缩放、拖拽平移和全屏查看">
+                  <div class="graph-controls" aria-label="图谱缩放控制">
+                    <button id="graphZoomOut" type="button" title="缩小图谱" aria-label="缩小图谱">
+                      <i data-lucide="minus" aria-hidden="true"></i>
+                    </button>
+                    <button id="graphZoomReset" class="graph-zoom-reset" type="button" title="重置图谱视图" aria-label="重置图谱视图">
+                      <span id="graphZoomValue">100%</span>
+                    </button>
+                    <button id="graphZoomIn" type="button" title="放大图谱" aria-label="放大图谱">
+                      <i data-lucide="plus" aria-hidden="true"></i>
+                    </button>
+                    <button id="graphFullscreen" type="button" title="全屏查看图谱" aria-label="全屏查看图谱">
+                      <i data-lucide="maximize-2" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                  <div class="graph-hint" aria-hidden="true">滚轮缩放 · 拖动画布 · 双击复位</div>
+                  <svg id="networkGraph" viewBox="0 0 1120 650" role="img" aria-label="美股与A股产业链关联图"></svg>
+                  <div id="graphTooltip" class="graph-tooltip" hidden></div>
+                </div>
+
+                <div class="relationship-legend" aria-label="关系图例">
+                  <span><i class="line-sample chain"></i>产业链依赖</span>
+                  <span><i class="line-sample capex"></i>资本开支传导</span>
+                  <span><i class="line-sample power"></i>AI电力映射</span>
+                  <span><i class="line-sample theme"></i>同主题观察</span>
+                  <span><i class="line-sample mapping"></i>美股到A股映射</span>
+                </div>
+              </div>
+
+              <aside id="detailPanel" class="detail-panel" aria-live="polite"></aside>
+            </div>
+          </section>
+
+          <section id="matrixView" class="content-view" aria-label="特征矩阵">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th><button type="button" data-sort="ticker">代码 <i data-lucide="arrow-up-down"></i></button></th>
+                    <th><button type="button" data-sort="company">公司 <i data-lucide="arrow-up-down"></i></button></th>
+                    <th><button type="button" data-sort="market">市场 <i data-lucide="arrow-up-down"></i></button></th>
+                    <th><button type="button" data-sort="chain_layer">位置 <i data-lucide="arrow-up-down"></i></button></th>
+                    <th><button type="button" data-sort="sector">板块 <i data-lucide="arrow-up-down"></i></button></th>
+                    <th><button type="button" data-sort="livePrice">价格 <i data-lucide="arrow-up-down"></i></button></th>
+                    <th><button type="button" data-sort="liveChange">日涨跌 <i data-lucide="arrow-up-down"></i></button></th>
+                    <th>核心定位</th>
+                    <th>关键观察</th>
+                    <th><button type="button" data-sort="status">状态 <i data-lucide="arrow-up-down"></i></button></th>
+                    <th>关联</th>
+                  </tr>
+                </thead>
+                <tbody id="matrixBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="listView" class="content-view" aria-label="股票列表">
+            <div id="chainColumns" class="chain-columns"></div>
+          </section>
+
+          <section id="discoveryView" class="content-view" aria-label="主动发现">
+            <div id="discoveryPanel" class="discovery-panel">
+              <div class="empty-state">主动发现数据加载中</div>
+            </div>
+          </section>
+
+          <section id="policyView" class="content-view" aria-label="政策压力">
+            <div id="policyPanel" class="policy-panel">
+              <div class="empty-state">政策压力数据加载中</div>
+            </div>
+          </section>
+
+          <footer class="page-footer">
+            <p>关系线、A 股映射、主动发现与政策压力信号来自研究框架，不等同于已确认客户、供应商或持仓建议。</p>
+            <span>WATCHLIST / RESEARCH MAP</span>
+          </footer>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

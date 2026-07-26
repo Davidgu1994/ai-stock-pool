@@ -1,0 +1,21 @@
+{
+  "name": "ai-stock-pool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI industry-chain stock-pool dashboard with US/A-share mapping, active discovery, and policy-pressure signals.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-static.mjs",
+    "test": "node --test cloudflare/worker.test.mjs",
+    "validate:data": "node scripts/validate-data.mjs",
+    "check": "npm run validate:data && npm run test && npm run build && node scripts/wrangler-dry-run.mjs",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:cloudflare": "npm run deploy"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "wrangler": "4.114.0"
+  }
+}

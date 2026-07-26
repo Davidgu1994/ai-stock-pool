@@ -1,0 +1,11 @@
+AI Stock Pool includes generated research snapshots that reference third-party
+market data, company names, news feeds, public web pages, and arXiv metadata.
+
+The MIT License applies to the source code in this repository. It does not
+grant rights to third-party data or content. Users are responsible for
+complying with the terms, attribution requirements, and redistribution rules
+of each original provider.
+
+The project is provided for research and educational use. It is not investment
+advice, a solicitation, or an automated trading service. Data can be delayed,
+incomplete, or incorrect.

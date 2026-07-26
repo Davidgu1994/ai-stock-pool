@@ -1,0 +1,104 @@
+{
+  "asOf": "2026-07-24T08:00:00-04:00",
+  "version": "0.1-demo",
+  "status": "demo_snapshot",
+  "summary": "利率、波动率与股市回撤同步抬升，指数进入高压区；后续重点验证是否出现政策执行延期、豁免或谈判措辞软化。",
+  "index": {
+    "value": 68.4,
+    "zone": "high_pressure",
+    "change5d": 6.8
+  },
+  "drivers": [
+    {
+      "id": "approval",
+      "name": "Net approval",
+      "nameZh": "净支持率",
+      "weight": 0.25,
+      "pressureScore": 77,
+      "direction": "down_is_pressure",
+      "changeLabel": "近30日 -2.1pt"
+    },
+    {
+      "id": "ust10y",
+      "name": "US 10Y yield",
+      "nameZh": "10年期美债",
+      "weight": 0.15,
+      "pressureScore": 71,
+      "direction": "up_is_pressure",
+      "changeLabel": "近5日 +12bp"
+    },
+    {
+      "id": "move",
+      "name": "MOVE",
+      "nameZh": "债券波动率",
+      "weight": 0.15,
+      "pressureScore": 63,
+      "direction": "up_is_pressure",
+      "changeLabel": "近5日 +6.2"
+    },
+    {
+      "id": "spx",
+      "name": "S&P 500",
+      "nameZh": "标普500",
+      "weight": 0.2,
+      "pressureScore": 68,
+      "direction": "down_is_pressure",
+      "changeLabel": "近5日 -1.8%"
+    },
+    {
+      "id": "vix",
+      "name": "VIX",
+      "nameZh": "股市恐慌",
+      "weight": 0.15,
+      "pressureScore": 74,
+      "direction": "up_is_pressure",
+      "changeLabel": "近5日 +3.9"
+    },
+    {
+      "id": "inflation",
+      "name": "Short-term inflation expectations",
+      "nameZh": "短期通胀预期",
+      "weight": 0.1,
+      "pressureScore": 56,
+      "direction": "up_is_pressure",
+      "changeLabel": "近1月 +0.3pt"
+    }
+  ],
+  "history": [
+    { "date": "2026-06-06", "label": "06.06", "value": 41 },
+    { "date": "2026-06-13", "label": "06.13", "value": 47 },
+    { "date": "2026-06-20", "label": "06.20", "value": 45 },
+    { "date": "2026-06-27", "label": "06.27", "value": 52 },
+    { "date": "2026-07-04", "label": "07.04", "value": 55 },
+    { "date": "2026-07-11", "label": "07.11", "value": 59 },
+    { "date": "2026-07-18", "label": "07.18", "value": 63 },
+    { "date": "2026-07-24", "label": "07.24", "value": 68.4 }
+  ],
+  "industryMapping": [
+    {
+      "sector": "本土制造与关税链",
+      "stance": "观察",
+      "text": "指数高位意味着延期与豁免概率上升，但必须等待政策文本确认；先看订单和补贴兑现。",
+      "poolCategories": ["半导体设备", "半导体与设备", "半导体材料", "电子特气"]
+    },
+    {
+      "sector": "长久期成长",
+      "stance": "等回踩",
+      "text": "政策压力上升常伴随利率与波动率抬升，估值承压可能先于基本面，等待风险溢价回落。",
+      "poolCategories": ["云与软件", "互联网平台", "加密与区块链"]
+    },
+    {
+      "sector": "国防与能源",
+      "stance": "观察",
+      "text": "地缘事件提供脉冲，但高压力也可能推动降级与谈判；区分订单能见度和纯主题交易。",
+      "poolCategories": ["太空与国防", "国防军工", "能源", "能源与核电", "核能"]
+    },
+    {
+      "sector": "AI基础设施",
+      "stance": "能下手",
+      "text": "政策噪音下优先选择需求和资本开支证据更强的基础设施环节，并结合行情位置分批处理。",
+      "poolCategories": ["数据中心基础设施", "AI算力与服务器", "数据存储", "光子学与光通信", "光通信"]
+    }
+  ],
+  "disclaimer": "Demo snapshot only. Not investment advice."
+}
