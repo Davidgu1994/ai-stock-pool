@@ -1,61 +1,132 @@
+<div align="center">
+
 # AI 产业链股票池
 
-一个面向研究工作的开源股票池信息页，覆盖美股、A 股映射、AI 产业链位置、关系图谱、主动发现和政策压力指数。
+面向投资研究的美股 / A 股产业链工作台：关系图谱、主动发现、arXiv 信号、行情位置与政策压力。
 
-[![Live Demo](https://img.shields.io/badge/demo-stocks.mastersgo.cc-ff6b35)](https://stocks.mastersgo.cc)
+**简体中文** · [English](README.en.md)
+
+[![Live Demo](https://img.shields.io/badge/在线演示-stocks.mastersgo.cc-ff6b35)](https://stocks.mastersgo.cc)
+[![Release](https://img.shields.io/github/v/release/yaoleifly/ai-stock-pool?color=0f766e)](https://github.com/yaoleifly/ai-stock-pool/releases)
+[![License](https://img.shields.io/github/license/yaoleifly/ai-stock-pool)](LICENSE)
+
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyaoleifly%2Fai-stock-pool&project-name=ai-stock-pool&repository-name=ai-stock-pool)
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/yaoleifly/ai-stock-pool)
 
-> 这是研究工具，不是自动交易系统。股票池映射、候选评分和政策压力均不构成投资建议。
+</div>
 
-## 功能
+> [!IMPORTANT]
+> 这是研究与信息组织工具，不是自动交易系统。股票池映射、候选评分和政策压力均不构成投资建议。
 
-- 美股与 A 股统一股票池，支持市场、产业链位置和主题筛选。
-- 产业关系图谱，支持缩放、全屏、弱关系隐藏和主题聚焦。
-- 主动发现：聚合官方信号、新闻、arXiv 论文、当前股票池和行情位置。
-- 政策压力指数：综合净支持率、美债、MOVE、标普 500、VIX 与 CPI Nowcast。
-- Vercel Python Functions 实时行情与政策压力接口。
-- Cloudflare Workers 静态资源与同路径 API 适配。
-- 不依赖前端框架，核心页面可直接阅读和修改。
+## 为什么做这个项目
+
+传统股票列表只能回答“有哪些公司”，很难回答：
+
+- 一家公司在 AI 资本开支链条中处于什么位置？
+- 美股主线如何映射到 A 股供应链与主题资产？
+- 新闻、官方发布和前沿论文，最近把哪些方向推到了研究优先级前列？
+- 当前行情位置是否已经透支了基本面信号？
+- 利率、波动率、股市、通胀与民调共同形成了多大的政策约束？
+
+本项目把这些问题放进同一套可审计的数据和页面结构中。它不会自动改写正式股票池；主动发现只提出候选，最终仍需人工核实。
+
+## 核心功能
+
+| 模块 | 能力 | 主要输入 |
+|---|---|---|
+| 关系图谱 | 上游 / 中游 / 下游布局、主题关系、A 股映射、缩放与全屏 | `stock-pool.csv` |
+| 特征矩阵 | 按产业位置、主题、市场和状态对比标的 | `stock-pool.csv` |
+| 股票列表 | 搜索、筛选、行情与研究定位 | 股票池 + `/api/quotes` |
+| 主动发现 | 官方信号、新闻、arXiv、股票池与行情位置联合评分 | 4 份 discovery CSV + 日报 |
+| 政策压力 | 六项压力驱动、趋势和行业传导 | `/api/policy` + `tpi-latest.json` |
+
+主动发现默认覆盖：
+
+- 官方与产业信号；
+- 新闻和产业链变化；
+- arXiv 上与 AI 推理、存储、网络、机器人、先进封装等相关的论文；
+- 当前股票池及美股 / A 股映射；
+- 价格变化和行情位置。
+
+政策压力指数采用六项指标：净支持率 25%、标普 500 20%、10 年期美债 15%、MOVE 15%、VIX 15%、CPI Nowcast 10%。高分表示市场与政治约束更强，不代表某项政策必然撤回。
+
+## 系统架构
+
+```mermaid
+flowchart LR
+    A["正式股票池与映射"] --> D["stock-pool.csv"]
+    B["官方信号 / 新闻 / arXiv"] --> E["discovery_engine.py"]
+    C["行情数据"] --> E
+    D --> E
+    E --> F["信号 / 论文 / 候选 / 日报"]
+    D --> UI["浏览器工作台"]
+    F --> UI
+    Q["/api/quotes"] --> UI
+    P["/api/policy"] --> UI
+    UI --> V["Vercel Python Functions"]
+    UI --> W["Cloudflare Worker"]
+```
+
+前端不依赖 React、Vue 或数据库，直接读取静态 CSV / JSON 和同域 API。部署产物透明，用户可以检查每一条候选的来源、评分与处理状态。
 
 ## 一键部署
+
+### 部署方式对比
+
+| | Vercel | Cloudflare Workers |
+|---|---|---|
+| 静态页面 | 原生托管 | Workers Static Assets |
+| `/api/health` | Python Function | Worker 本地计算 |
+| `/api/quotes` | 独立运行 | 默认代理兼容上游 |
+| `/api/policy` | 独立运行 | 默认代理兼容上游，失败时回退快照 |
+| API Key | 不需要 | 不需要 |
+| 推荐场景 | 完整自托管 | 快速复制页面和边缘入口 |
 
 ### Vercel
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyaoleifly%2Fai-stock-pool&project-name=ai-stock-pool&repository-name=ai-stock-pool)
 
-Vercel 版本使用仓库内的 Python Functions：
+Vercel 会克隆仓库并部署静态页面与 `api/*.py`：
 
-- `/api/health`：股票池与市场计数。
-- `/api/quotes`：Yahoo Finance 行情聚合，60 秒缓存。
-- `/api/policy`：政策压力六项指标，300 秒缓存。
+- `/api/health`：股票池数量与市场分布；
+- `/api/quotes`：Yahoo Finance 行情聚合，默认缓存 60 秒；
+- `/api/policy`：六项政策压力指标，默认缓存 300 秒。
 
-无需配置 API Key。部署完成后，Vercel 会自动连接你克隆出的 Git 仓库，后续提交会触发新部署。
+整个流程不要求填写密钥。部署完成后，推送到新仓库会自动触发后续部署。
 
 ### Cloudflare Workers
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/yaoleifly/ai-stock-pool)
 
-Cloudflare 会构建 `dist/` 静态资源并部署一个 Worker：
+Cloudflare 会执行 `npm run build`，把页面、数据快照和日报整理到 `dist/`，然后依据 `wrangler.jsonc` 部署 Worker。
 
-- `/api/health` 由 Worker 根据当前 `stock-pool.csv` 本地计算。
-- `/api/quotes` 与 `/api/policy` 默认代理公开演示接口 `https://stocks.mastersgo.cc`。
-- 上游不可用时，政策页会降级到仓库内快照；页面和研究数据仍可浏览。
+默认行为：
 
-如需使用自己的兼容 API，把 Wrangler 变量 `UPSTREAM_API_ORIGIN` 改为你的服务地址即可。这个变量不是密钥。
+- `/api/health` 根据部署包中的 `stock-pool.csv` 本地计算；
+- `/api/quotes` 和 `/api/policy` 使用 `UPSTREAM_API_ORIGIN=https://stocks.mastersgo.cc`；
+- 政策上游不可用时，自动回退到 `tpi-latest.json`；
+- 行情上游不可用时返回明确的降级状态，不伪造报价。
+
+如果你已经部署了兼容 API，把 `UPSTREAM_API_ORIGIN` 改成自己的服务地址即可。它是公开配置，不是密钥。
 
 ## 本地运行
 
-需要 Python 3.11+：
+### Python 服务
+
+要求 Python 3.11+：
 
 ```bash
+git clone https://github.com/yaoleifly/ai-stock-pool.git
+cd ai-stock-pool
 python3 -m pip install -r requirements.txt
 python3 server.py --port 8765
 ```
 
 打开 `http://127.0.0.1:8765`。
 
-Cloudflare 版本需要 Node.js 20+：
+### Cloudflare Worker
+
+要求 Node.js 20+：
 
 ```bash
 npm install
@@ -63,9 +134,14 @@ npm run check
 npx wrangler dev
 ```
 
-## 更新数据
+发布到自己的 Cloudflare 账户：
 
-刷新主动发现数据：
+```bash
+npx wrangler login
+npm run deploy:cloudflare
+```
+
+## 更新主动发现数据
 
 ```bash
 python3 discovery_engine.py \
@@ -77,66 +153,127 @@ python3 discovery_engine.py \
   --arxiv-delay 3
 ```
 
-脚本会生成：
+生成或更新：
 
 - `discovery-signals.csv`
 - `arxiv-papers.csv`
 - `discovery-candidates.csv`
 - `reports/discovery-YYYY-MM-DD.md`
 
-运行后先执行 `npm run validate:data`。如果信号和候选意外变成空表，不要发布；这通常意味着网络抓取失败，而不是市场没有信号。
+更新后必须先运行：
 
-重新合并自有美股和 A 股源表：
+```bash
+npm run validate:data
+```
+
+如果信号与候选意外变成空表，应停止发布。这通常是网络抓取失败，不等于市场没有新信号。
+
+## 合并自己的股票池
 
 ```bash
 python3 sync_pool.py \
   --us-source /path/to/us-stock-pool.csv \
-  --a-share-source /path/to/a-share-mapping.csv
+  --a-share-source /path/to/a-share-mapping.csv \
+  --output stock-pool.csv
 ```
 
-省略参数时，默认读取项目上一级目录中的 `美股股票池.csv` 与 `A股映射股票池.csv`。你也可以直接维护部署用的 `stock-pool.csv`。
+省略参数时，脚本默认读取项目上一级目录中的 `美股股票池.csv` 与 `A股映射股票池.csv`。
 
-## 数据文件约定
+正式源表与主动发现层是两套状态：发现引擎只生成 `observe`、`already_in_pool`、`reject` 等研究建议，不会自动把候选写入正式股票池。
 
-| 文件 | 用途 |
-|---|---|
-| `stock-pool.csv` | 正式股票池部署快照 |
-| `discovery-signals.csv` | 官方与新闻信号 |
-| `arxiv-papers.csv` | arXiv 论文信号 |
-| `discovery-candidates.csv` | 候选评分与处理状态 |
-| `discovery-history.csv` | 每日发现趋势 |
-| `tpi-latest.json` | 政策压力降级快照 |
+## API
 
-前端只读取这些公开快照和同域 `/api/*`，因此不需要数据库。
+### `GET /api/health`
 
-## 项目结构
+返回股票池数量、市场分布、缓存周期和政策接口地址。
+
+### `GET /api/quotes`
+
+返回股票池行情、缺失代码、市场计数和数据时间。添加 `?refresh=1` 可请求跳过应用层缓存。
+
+### `GET /api/policy`
+
+返回政策压力总分、六项驱动、近期趋势、行业映射、来源新鲜度和错误账本。添加 `?refresh=1` 可请求重新抓取。
+
+> 上游行情和宏观数据可能延迟、限流或暂时不可用。API 会报告缺口或使用明确标注的回退数据。
+
+## 数据文件
+
+| 文件 | 用途 | 是否由脚本生成 |
+|---|---|---|
+| `stock-pool.csv` | 正式部署股票池 | `sync_pool.py` 可生成 |
+| `discovery-signals.csv` | 官方与新闻信号 | 是 |
+| `arxiv-papers.csv` | arXiv 论文信号 | 是 |
+| `discovery-candidates.csv` | 候选评分与处理状态 | 是 |
+| `discovery-history.csv` | 每日发现趋势 | 人工验收后维护 |
+| `tpi-latest.json` | 政策压力降级快照 | 按有效快照维护 |
+
+## 目录结构
 
 ```text
-index.html / app.js / styles.css  页面与交互
-api/                             Vercel Python Functions
-cloudflare/                      Cloudflare Worker 与测试
-scripts/                         静态构建和数据完整性检查
-reports/                         主动发现日报
-policy_engine.py                 政策压力计算
-discovery_engine.py              主动发现引擎
-server.py                        本地服务与行情接口
-vercel.json                      Vercel 配置
-wrangler.jsonc                   Cloudflare Workers 配置
+api/                     Vercel Python Functions
+cloudflare/              Cloudflare Worker 与单元测试
+reports/                 主动发现日报
+scripts/                 静态构建、完整性检查、Wrangler 干跑
+app.js                   页面状态、数据加载和交互
+index.html               页面结构
+styles.css               视觉系统
+discovery_engine.py      主动发现引擎
+policy_engine.py         政策压力计算
+server.py                本地服务器与行情 API
+sync_pool.py             美股 / A 股源表合并
+vercel.json              Vercel 配置
+wrangler.jsonc           Cloudflare Workers 配置
 ```
 
-## 安全与隐私
+## 发布前检查
 
-- 仓库不需要 API Key、数据库密码或交易账户凭证。
-- `.env*`、`.dev.vars`、`.vercel/`、`.wrangler/` 不会提交。
-- 不要把券商账户、持仓明细、内部研究材料或付费数据源内容提交到公开仓库。
-- 漏洞请通过 GitHub Security Advisory 私下报告，参见 [SECURITY.md](SECURITY.md)。
+```bash
+npm run check
+node --check app.js
+PYTHONPYCACHEPREFIX=/tmp/ai-stock-pool-pycache \
+  python3 -m py_compile \
+  sync_pool.py discovery_engine.py policy_engine.py server.py \
+  api/health.py api/quotes.py api/policy.py
+```
 
-## 许可证和数据边界
+`npm run check` 会依次检查数据非空、运行 Worker 单元测试、构建静态资源并执行 Wrangler 部署干跑。
 
-代码采用 [MIT License](LICENSE)。股票代码、行情、新闻、论文和政策数据仍受各原始数据提供方条款约束；仓库中的生成快照仅用于演示与研究，详见 [NOTICE](NOTICE)。
+## 常见问题
 
-欢迎提交 Issue 和 Pull Request，贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+<details>
+<summary>为什么部分股票没有行情？</summary>
 
-## English
+Yahoo Finance 可能缺少特定市场代码或临时限流。页面会保留股票池标的，并把缺失项列入 `missing`，不会制造价格。
+</details>
 
-AI Stock Pool is a framework-free research dashboard for US equities, A-share mappings, industry-chain graphs, active discovery, and policy-pressure signals. It ships with Vercel Python Functions and a Cloudflare Workers adapter. Use the deploy buttons above to create your own copy.
+<details>
+<summary>为什么 arXiv 论文数量有时为 0？</summary>
+
+先检查运行警告。API 超时、网络限制或请求失败都可能造成零结果，不能直接解释为“最近没有相关论文”。
+</details>
+
+<details>
+<summary>Cloudflare 版本是否完全独立？</summary>
+
+静态页面和健康检查独立运行；行情和政策默认使用可替换的兼容上游。需要完全独立的数据后端时，推荐先部署 Vercel 版本，再把 Cloudflare 的 `UPSTREAM_API_ORIGIN` 指向该地址。
+</details>
+
+<details>
+<summary>候选会自动加入股票池吗？</summary>
+
+不会。主动发现只提供研究队列和证据线索，正式入池必须经过人工核实。
+</details>
+
+## 安全、数据与许可证
+
+- 项目不需要券商账户、交易凭证或数据库密码；
+- `.env*`、`.dev.vars`、`.vercel/`、`.wrangler/` 不会提交；
+- 不要把持仓明细、内部研究或付费数据内容提交到公开仓库；
+- 漏洞请通过 GitHub Security Advisory 私下报告，参见 [SECURITY.md](SECURITY.md)；
+- 源代码采用 [MIT License](LICENSE)；
+- 行情、新闻、论文和政策数据仍受原始提供方条款约束，详见 [NOTICE](NOTICE)。
+
+## 参与贡献
+
+Issue 和 Pull Request 都欢迎。提交前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，并确保主题映射没有被表述为已经确认的客户、供应商或投资结论。

@@ -1,5 +1,7 @@
 # Security Policy
 
+**简体中文** · [English](SECURITY.en.md)
+
 ## Supported version
 
 安全修复优先覆盖默认分支的最新版本。

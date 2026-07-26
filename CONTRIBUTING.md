@@ -1,5 +1,7 @@
 # Contributing
 
+**简体中文** · [English](CONTRIBUTING.en.md)
+
 感谢你改进 AI 产业链股票池。
 
 ## 提交前
