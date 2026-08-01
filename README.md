@@ -168,6 +168,17 @@ npm run validate:data
 
 如果信号与候选意外变成空表，应停止发布。这通常是网络抓取失败，不等于市场没有新信号。
 
+### 每日自动刷新
+
+仓库内置 `.github/workflows/daily-discovery.yml`，每天北京时间 16:17 自动运行，也可在 GitHub Actions 页面手动触发。工作流会：
+
+1. 抓取最近 7 天的官方、新闻、arXiv 和行情信号；
+2. 生成 discovery CSV、日报并自动维护 `discovery-history.csv`；
+3. 执行单元测试、静态构建和快照防骤降检查；
+4. 仅在校验通过且数据有变化时提交到默认分支。
+
+当前数据源不需要额外 API Key；提交权限使用 GitHub 自动提供的 `GITHUB_TOKEN`。若 Vercel 项目已关联本仓库，提交到生产分支后会自动部署。
+
 ## 合并自己的股票池
 
 ```bash
@@ -177,7 +188,7 @@ python3 sync_pool.py \
   --output stock-pool.csv
 ```
 
-省略参数时，脚本默认读取项目上一级目录中的 `美股股票池.csv` 与 `A股映射股票池.csv`。
+省略参数时，脚本优先读取项目上一级目录中的 `美股股票池.csv` 与 `A股映射股票池.csv`。主动发现脚本在这两张源表不存在时，会从仓库内的 `stock-pool.csv` 重建映射上下文，因此 GitHub Actions 可以独立运行。
 
 正式源表与主动发现层是两套状态：发现引擎只生成 `observe`、`already_in_pool`、`reject` 等研究建议，不会自动把候选写入正式股票池。
 
@@ -205,7 +216,7 @@ python3 sync_pool.py \
 | `discovery-signals.csv` | 官方与新闻信号 | 是 |
 | `arxiv-papers.csv` | arXiv 论文信号 | 是 |
 | `discovery-candidates.csv` | 候选评分与处理状态 | 是 |
-| `discovery-history.csv` | 每日发现趋势 | 人工验收后维护 |
+| `discovery-history.csv` | 每日发现趋势 | 主动发现脚本自动维护 |
 | `tpi-latest.json` | 政策压力降级快照 | 按有效快照维护 |
 
 ## 目录结构

@@ -46,6 +46,7 @@ ALIASES_FILE = WEB_DIR / "mapping-aliases.json"
 SIGNALS_FILE = WEB_DIR / "discovery-signals.csv"
 PAPERS_FILE = WEB_DIR / "arxiv-papers.csv"
 CANDIDATES_FILE = WEB_DIR / "discovery-candidates.csv"
+HISTORY_FILE = WEB_DIR / "discovery-history.csv"
 REPORTS_DIR = WEB_DIR / "reports"
 
 USER_AGENT = "StockDiscoveryEngine/0.1 (research dashboard; contact=local)"
@@ -101,11 +102,13 @@ CANDIDATE_FIELDS = [
     "chain_layer",
     "mapped_us",
     "why_now",
+    "attribution_type",
     "source_strength_score",
     "exposure_purity_score",
     "paper_signal_score",
     "novelty_score",
     "sentiment_score",
+    "financial_confirmation_score",
     "market_setup_score",
     "risk_score",
     "total_score",
@@ -117,6 +120,22 @@ CANDIDATE_FIELDS = [
     "change_percent",
     "quote_timestamp",
     "notes",
+]
+
+HISTORY_FIELDS = [
+    "date",
+    "pool_size",
+    "quotes_requested",
+    "quotes_received",
+    "missing_quotes",
+    "extra_quotes",
+    "usable_quotes",
+    "signals",
+    "arxiv_papers",
+    "candidates",
+    "observe_count",
+    "observe_tickers",
+    "report_href",
 ]
 
 
@@ -492,7 +511,7 @@ def read_csv_rows(path: Path) -> list[dict[str, str]]:
 def write_csv_rows(path: Path, fields: list[str], rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow({field: row.get(field, "") for field in fields})
@@ -526,10 +545,40 @@ def load_aliases(path: Path = ALIASES_FILE) -> dict[str, list[str]]:
     return aliases
 
 
+def source_rows_from_pool(pool_rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Reconstruct source rows from the deploy snapshot for reproducible CI runs."""
+    us_rows: list[dict[str, str]] = []
+    a_rows: list[dict[str, str]] = []
+    for row in pool_rows:
+        market = row.get("market", "")
+        if market == "A股" or re.search(r"\.(SZ|SS|BJ)$", row.get("ticker", "").upper()):
+            a_rows.append(
+                {
+                    **row,
+                    "source_us": row.get("source_us", "") or row.get("source", ""),
+                    "pool_status": row.get("pool_status", "") or row.get("status", ""),
+                }
+            )
+        else:
+            us_rows.append(
+                {
+                    **row,
+                    "source_us": "",
+                    "pool_status": row.get("pool_status", "") or row.get("status", ""),
+                }
+            )
+    return us_rows, a_rows
+
+
 def build_pool_context() -> dict[str, object]:
     pool_rows = read_csv_rows(POOL_FILE)
     us_rows = read_csv_rows(US_SOURCE_FILE)
     a_rows = read_csv_rows(A_SOURCE_FILE)
+    fallback_us_rows, fallback_a_rows = source_rows_from_pool(pool_rows)
+    if not us_rows:
+        us_rows = fallback_us_rows
+    if not a_rows:
+        a_rows = fallback_a_rows
 
     pool_by_ticker = {row["ticker"].strip().upper(): row for row in pool_rows if row.get("ticker")}
     source_by_ticker: dict[str, dict[str, str]] = {}
@@ -1109,6 +1158,32 @@ def quote_for(quotes_payload: dict[str, object], ticker: str) -> dict[str, objec
     return None
 
 
+def merge_candidate_quote_fallback(quotes_payload: dict[str, object], candidate_rows: list[dict[str, str]]) -> int:
+    quotes = quotes_payload.setdefault("quotes", {})
+    if not isinstance(quotes, dict):
+        quotes = {}
+        quotes_payload["quotes"] = quotes
+    restored = 0
+    for row in candidate_rows:
+        ticker = row.get("ticker", "").strip().upper()
+        price = finite_float(row.get("price"))
+        change_percent = finite_float(row.get("change_percent"))
+        if not ticker or ticker in quotes or (price is None and change_percent is None):
+            continue
+        quotes[ticker] = {
+            "price": price,
+            "changePercent": change_percent,
+            "currency": "CNY" if re.search(r"\.(SZ|SS|BJ)$", ticker) else "USD",
+            "market": row.get("market", "") or ("A股" if re.search(r"\.(SZ|SS|BJ)$", ticker) else "美股"),
+            "timestamp": row.get("quote_timestamp", ""),
+            "stale": True,
+        }
+        restored += 1
+    quotes_payload["_quote_available_count"] = len(quotes)
+    quotes_payload["_fallback_quote_count"] = restored
+    return restored
+
+
 def finite_float(value: object) -> float | None:
     try:
         number = float(value)
@@ -1119,20 +1194,20 @@ def finite_float(value: object) -> float | None:
 
 def market_setup_score(quote: dict[str, object] | None, status: str = "") -> tuple[int, str]:
     if not quote:
-        return 5, "无线上行情，按中性处理"
+        return 6, "无线上行情，按中性处理"
     change = finite_float(quote.get("changePercent"))
     if change is None:
-        return 5, "行情无涨跌幅，按中性处理"
-    score = 8
+        return 6, "行情无涨跌幅，按中性处理"
+    score = 10
     note = "日内位置温和"
     if change <= -8:
         score, note = 3, "单日大跌，需要确认是否基本面破坏"
     elif change <= -4:
-        score, note = 5, "短线偏弱，可观察是否回撤提供更好位置"
+        score, note = 6, "短线偏弱，可观察是否回撤提供更好位置"
     elif change <= 4:
-        score, note = 8, "日内位置温和"
+        score, note = 10, "日内位置温和"
     elif change <= 8:
-        score, note = 6, "日内较强，注意追高"
+        score, note = 7, "日内较强，注意追高"
     else:
         score, note = 3, "日内过热，优先观察不追"
     if "过热" in status or "高估值" in status:
@@ -1155,11 +1230,52 @@ def row_for_ticker(ticker: str, context: dict[str, object]) -> dict[str, str]:
     pool_by_ticker: dict[str, dict[str, str]] = context["pool_by_ticker"]  # type: ignore[assignment]
     source_by_ticker: dict[str, dict[str, str]] = context["source_by_ticker"]  # type: ignore[assignment]
     if ticker in pool_by_ticker:
-        return pool_by_ticker[ticker]
+        source_row = source_by_ticker.get(ticker, {})
+        return {
+            **pool_by_ticker[ticker],
+            "source_us": source_row.get("source_us", "") or pool_by_ticker[ticker].get("source", ""),
+            "pool_status": source_row.get("pool_status", "") or pool_by_ticker[ticker].get("status", ""),
+        }
     if ticker in source_by_ticker:
         return source_by_ticker[ticker]
     company, market = COMPANY_OVERRIDES.get(ticker, (ticker, "美股"))
     return {"ticker": ticker, "company": company, "market": market, "chain_layer": "", "source_us": "", "status": ""}
+
+
+def direct_non_paper_signals(ticker: str, support_signals: list[Signal]) -> list[Signal]:
+    return [
+        signal
+        for signal in support_signals
+        if signal.source_type in {"official", "news"} and ticker in split_source_tokens(signal.tickers_mentioned)
+    ]
+
+
+def financial_confirmation_score(row: dict[str, str]) -> int:
+    evidence = row.get("evidence_level", "").lower()
+    if "financial-confirmed" in evidence:
+        return 15
+    if "commodity-confirmed" in evidence:
+        return 12
+    if "product-confirmed" in evidence:
+        return 10
+    if "financial-mixed" in evidence:
+        return 7
+    if "financial-weak" in evidence or "earnings-weak" in evidence:
+        return 3
+    return 0
+
+
+def attribution_for(ticker: str, support_signals: list[Signal], row: dict[str, str]) -> tuple[str, int]:
+    direct = direct_non_paper_signals(ticker, support_signals)
+    if any(signal.source_type == "official" for signal in direct):
+        return "direct_official", 15
+    if direct:
+        return "direct_news", 13
+    if financial_confirmation_score(row) >= 10:
+        return "confirmed_proxy", 12
+    if row.get("source_us"):
+        return "source_mapping", 9
+    return "theme_proxy", 6
 
 
 def candidate_scores(
@@ -1175,22 +1291,24 @@ def candidate_scores(
     notes: list[str] = []
 
     source_types = Counter(signal.source_type for signal in support_signals)
-    if source_types.get("official"):
-        source_strength = min(20, 18 + source_types["official"])
+    direct_types = Counter(signal.source_type for signal in direct_non_paper_signals(ticker, support_signals))
+    if direct_types.get("official"):
+        source_strength = min(20, 18 + direct_types["official"])
+    elif direct_types.get("news"):
+        source_strength = min(20, 12 + direct_types["news"] * 2)
+    elif source_types.get("official"):
+        source_strength = min(16, 12 + source_types["official"])
     elif source_types.get("news"):
-        source_strength = min(16, 10 + source_types["news"] * 2)
+        source_strength = min(14, 6 + source_types["news"])
     elif source_types.get("arxiv"):
         source_strength = min(10, 6 + source_types["arxiv"])
     else:
         source_strength = 0
 
-    if presence == "online_pool":
-        exposure = 13
-    elif presence == "source_pool_only":
-        exposure = 11
+    attribution_type, exposure = attribution_for(ticker, support_signals, row)
+    if presence == "source_pool_only":
         notes.append("已在源表但未出现在当前线上合并表")
-    else:
-        exposure = 8
+    elif presence == "not_in_pool":
         notes.append("不在当前股票池，需人工核实业务纯度")
     if re.search(r"\.(SZ|SS|BJ)$", ticker) and not row.get("evidence_level"):
         exposure = min(exposure, 8)
@@ -1210,19 +1328,20 @@ def candidate_scores(
         novelty = min(10, novelty + 1)
 
     sentiment = min(10, source_types.get("news", 0) * 2 + source_types.get("official", 0))
+    financial_score = financial_confirmation_score(row)
     market_score, market_note = market_setup_score(quote, status)
     notes.append(market_note)
 
-    risk_score = 5
-    if presence == "not_in_pool":
-        risk_score = 3
+    risk_score = 5 if attribution_type in {"direct_official", "confirmed_proxy"} else 4 if attribution_type == "direct_news" else 2
     if re.search(r"\.(SZ|SS|BJ)$", ticker) and ("概念" in row.get("role", "") or not row.get("evidence_level")):
-        risk_score = min(risk_score, 3)
-    if "过热" in status or "高估值" in status:
         risk_score = min(risk_score, 2)
+    if "过热" in status or "高估值" in status:
+        risk_score = min(risk_score, 1)
     if not support_signals and support_papers:
-        risk_score = min(risk_score, 3)
+        risk_score = min(risk_score, 1)
         notes.append("仅有论文信号，缺少产业采用确认")
+    if attribution_type == "theme_proxy":
+        notes.append("仅为主题代理，缺少公司级直接归因")
 
     scores = {
         "source_strength_score": source_strength,
@@ -1230,17 +1349,27 @@ def candidate_scores(
         "paper_signal_score": paper_score,
         "novelty_score": novelty,
         "sentiment_score": sentiment,
+        "financial_confirmation_score": financial_score,
         "market_setup_score": market_score,
         "risk_score": risk_score,
     }
     return scores, notes
 
 
-def recommendation(total: int, presence: str, support_signals: list[Signal], support_papers: list[dict[str, object]]) -> str:
+def recommendation(
+    ticker: str,
+    total: int,
+    presence: str,
+    support_signals: list[Signal],
+    support_papers: list[dict[str, object]],
+    attribution_type: str,
+    financial_score: int,
+) -> str:
     if presence == "online_pool":
         return "already_in_pool"
     has_non_paper = any(signal.source_type in {"official", "news"} for signal in support_signals)
-    if total >= 80 and has_non_paper:
+    has_company_proof = bool(direct_non_paper_signals(ticker, support_signals)) or financial_score >= 10
+    if total >= 80 and has_non_paper and has_company_proof and attribution_type != "theme_proxy":
         return "propose_add"
     if total >= 65 or (support_papers and has_non_paper):
         return "observe"
@@ -1254,6 +1383,7 @@ def build_candidates(
     papers: list[dict[str, object]],
     quotes_payload: dict[str, object],
     context: dict[str, object],
+    run_date: str | None = None,
 ) -> list[dict[str, object]]:
     by_ticker_signals: dict[str, list[Signal]] = defaultdict(list)
     by_ticker_papers: dict[str, list[dict[str, object]]] = defaultdict(list)
@@ -1269,7 +1399,7 @@ def build_candidates(
             by_ticker_papers[ticker].append(paper)
 
     all_tickers = sorted(set(by_ticker_signals) | set(by_ticker_papers))
-    run_date = now_utc().date().isoformat()
+    candidate_run_date = run_date or now_utc().date().isoformat()
     rows: list[dict[str, object]] = []
     for ticker in all_tickers:
         support_signals = by_ticker_signals.get(ticker, [])
@@ -1281,6 +1411,7 @@ def build_candidates(
         quote = quote_for(quotes_payload, ticker)
         scores, notes = candidate_scores(ticker, support_signals, support_papers, quote, context)
         total = sum(scores.values())
+        attribution_type, _exposure = attribution_for(ticker, support_signals, info)
         themes = sorted(
             set(
                 theme.strip()
@@ -1299,7 +1430,7 @@ def build_candidates(
         quote_change = finite_float(quote.get("changePercent")) if quote else None
         quote_price = finite_float(quote.get("price")) if quote else None
         row = {
-            "run_date": run_date,
+            "run_date": candidate_run_date,
             "ticker": ticker,
             "company": info.get("company", COMPANY_OVERRIDES.get(ticker, (ticker, ""))[0]),
             "market": info.get("market", COMPANY_OVERRIDES.get(ticker, ("", "美股"))[1]) or ("A股" if re.search(r"\.(SZ|SS|BJ)$", ticker) else "美股"),
@@ -1308,9 +1439,18 @@ def build_candidates(
             "chain_layer": info.get("chain_layer", "") or infer_layer(themes),
             "mapped_us": info.get("source_us", "") if re.search(r"\.(SZ|SS|BJ)$", ticker) else ticker,
             "why_now": " / ".join(clean_text(title, 120) for title in why_titles if title),
+            "attribution_type": attribution_type,
             **scores,
             "total_score": total,
-            "recommendation": recommendation(total, presence, support_signals, support_papers),
+            "recommendation": recommendation(
+                ticker,
+                total,
+                presence,
+                support_signals,
+                support_papers,
+                attribution_type,
+                scores["financial_confirmation_score"],
+            ),
             "review_status": "pending",
             "supporting_signals": "; ".join(signal.signal_id for signal in support_signals[:12]),
             "supporting_papers": "; ".join(str(paper.get("arxiv_id", "")) for paper in support_papers[:12] if paper.get("arxiv_id")),
@@ -1371,6 +1511,7 @@ def write_report(
     quote_received = quotes_payload.get("_online_received", quotes_payload.get("received", ""))
     quote_available = quotes_payload.get("_quote_available_count", len(quotes_payload.get("quotes", {})) if isinstance(quotes_payload.get("quotes", {}), dict) else "")
     extra_quote_count = quotes_payload.get("_extra_quote_count", 0)
+    fallback_quote_count = quotes_payload.get("_fallback_quote_count", 0)
     quote_missing = quotes_payload.get("missing", [])
 
     proposed = [row for row in candidates if row.get("recommendation") == "propose_add"]
@@ -1384,19 +1525,21 @@ def write_report(
         "",
         f"- 当前线上合并股票池：{len(pool_rows)} 只。",
         f"- 线上股票池行情：requested={quote_requested}，received={quote_received}，missing={quote_missing or []}。",
-        f"- 候选补充行情：extra={extra_quote_count}，本次可用报价={quote_available}。",
+        f"- 候选补充行情：extra={extra_quote_count}，fallback={fallback_quote_count}，本次可用报价={quote_available}。",
         f"- 本次新增/更新信号：{len(signals)} 条；arXiv 论文：{len(papers)} 篇；候选标的：{len(candidates)} 个。",
         "- 规则：本报告只生成研究候选，不自动修改正式股票池。",
         "",
         "## 建议新增候选",
         "",
         markdown_table(
-            ["代码", "公司", "市场", "主题", "总分", "建议", "为什么现在"],
+            ["代码", "公司", "市场", "归因", "财务确认", "主题", "总分", "建议", "为什么现在"],
             [
                 [
                     row.get("ticker", ""),
                     row.get("company", ""),
                     row.get("market", ""),
+                    row.get("attribution_type", ""),
+                    row.get("financial_confirmation_score", ""),
                     row.get("theme", ""),
                     row.get("total_score", ""),
                     row.get("recommendation", ""),
@@ -1409,13 +1552,14 @@ def write_report(
         "## 观察候选",
         "",
         markdown_table(
-            ["代码", "公司", "市场", "池状态", "主题", "总分", "备注"],
+            ["代码", "公司", "市场", "池状态", "归因", "主题", "总分", "备注"],
             [
                 [
                     row.get("ticker", ""),
                     row.get("company", ""),
                     row.get("market", ""),
                     row.get("pool_presence", ""),
+                    row.get("attribution_type", ""),
                     row.get("theme", ""),
                     row.get("total_score", ""),
                     row.get("notes", ""),
@@ -1499,6 +1643,44 @@ def write_report(
     path.write_text("\n".join(content), encoding="utf-8")
 
 
+def update_discovery_history(
+    report_date: str,
+    signals: list[Signal],
+    papers: list[dict[str, object]],
+    candidates: list[dict[str, object]],
+    quotes_payload: dict[str, object],
+    context: dict[str, object],
+    report_path: Path,
+) -> None:
+    existing = read_csv_rows(HISTORY_FILE)
+    observe = [row for row in candidates if row.get("recommendation") == "observe"]
+    missing = quotes_payload.get("missing", [])
+    if isinstance(missing, list):
+        missing_text = ";".join(str(item) for item in missing)
+    else:
+        missing_text = clean_text(missing)
+    quotes = quotes_payload.get("quotes", {})
+    usable_quotes = len(quotes) if isinstance(quotes, dict) else 0
+    row = {
+        "date": report_date,
+        "pool_size": len(context.get("pool_rows", [])),
+        "quotes_requested": quotes_payload.get("_online_requested", quotes_payload.get("requested", 0)),
+        "quotes_received": quotes_payload.get("_online_received", quotes_payload.get("received", 0)),
+        "missing_quotes": missing_text,
+        "extra_quotes": quotes_payload.get("_extra_quote_count", 0),
+        "usable_quotes": quotes_payload.get("_quote_available_count", usable_quotes),
+        "signals": len(signals),
+        "arxiv_papers": len(papers),
+        "candidates": len(candidates),
+        "observe_count": len(observe),
+        "observe_tickers": ";".join(str(item.get("ticker", "")) for item in observe if item.get("ticker")),
+        "report_href": report_path.relative_to(WEB_DIR).as_posix(),
+    }
+    merged = merge_rows(existing, [row], "date")
+    merged.sort(key=lambda item: str(item.get("date", "")))
+    write_csv_rows(HISTORY_FILE, HISTORY_FIELDS, merged)
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate active discovery candidates for the stock-pool dashboard.")
     parser.add_argument("--days", type=int, default=7, help="Lookback window for feeds and papers.")
@@ -1522,13 +1704,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.skip_network:
         existing_signals = [Signal(**{field: row.get(field, "") for field in SIGNAL_FIELDS}) for row in read_csv_rows(SIGNALS_FILE)]
         papers = read_csv_rows(PAPERS_FILE)
+        existing_candidates = read_csv_rows(CANDIDATES_FILE)
         quote_payload, quote_warnings = fetch_quotes()
         warnings.extend(quote_warnings)
+        restored_quotes = merge_candidate_quote_fallback(quote_payload, existing_candidates)
+        if restored_quotes:
+            warnings.append(f"quotes: restored {restored_quotes} values from the previous candidate snapshot")
         warnings.extend(enrich_quotes(quote_payload, collect_signal_tickers(existing_signals, papers), args.max_extra_quotes))
-        candidates = build_candidates(existing_signals, papers, quote_payload, context)
+        candidates = build_candidates(existing_signals, papers, quote_payload, context, run_date=args.report_date)
         write_csv_rows(CANDIDATES_FILE, CANDIDATE_FIELDS, candidates)
         report_path = REPORTS_DIR / f"discovery-{args.report_date}.md"
         write_report(report_path, existing_signals, papers, candidates, quote_payload, warnings, context)
+        update_discovery_history(args.report_date, existing_signals, papers, candidates, quote_payload, context, report_path)
         print_summary(existing_signals, papers, candidates, report_path, warnings)
         return 0
 
@@ -1550,8 +1737,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     warnings.extend(arxiv_warnings)
 
+    existing_candidates = read_csv_rows(CANDIDATES_FILE)
     quote_payload, quote_warnings = fetch_quotes()
     warnings.extend(quote_warnings)
+    restored_quotes = merge_candidate_quote_fallback(quote_payload, existing_candidates)
+    if restored_quotes:
+        warnings.append(f"quotes: restored {restored_quotes} values from the previous candidate snapshot")
     extra_quote_warnings = enrich_quotes(
         quote_payload,
         collect_signal_tickers(feed_signals + paper_signals, papers),
@@ -1568,13 +1759,14 @@ def main(argv: list[str] | None = None) -> int:
     merged_papers.sort(key=lambda row: (str(row.get("published", "")), int(row.get("paper_signal_score", 0) or 0)), reverse=True)
 
     signal_objects = [Signal(**{field: row.get(field, "") for field in SIGNAL_FIELDS}) for row in merged_signals]
-    candidates = build_candidates(signal_objects, merged_papers, quote_payload, context)
+    candidates = build_candidates(signal_objects, merged_papers, quote_payload, context, run_date=args.report_date)
 
     write_csv_rows(SIGNALS_FILE, SIGNAL_FIELDS, merged_signals)
     write_csv_rows(PAPERS_FILE, PAPER_FIELDS, merged_papers)
     write_csv_rows(CANDIDATES_FILE, CANDIDATE_FIELDS, candidates)
     report_path = REPORTS_DIR / f"discovery-{args.report_date}.md"
     write_report(report_path, signal_objects, merged_papers, candidates, quote_payload, warnings, context)
+    update_discovery_history(args.report_date, signal_objects, merged_papers, candidates, quote_payload, context, report_path)
     print_summary(signal_objects, merged_papers, candidates, report_path, warnings)
     return 0
 

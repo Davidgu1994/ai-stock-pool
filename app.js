@@ -404,6 +404,15 @@ function normalizeDiscoveryCandidate(row) {
     chainLayer: row.chain_layer || knownStock?.chain_layer || "",
     mappedUs: row.mapped_us || "",
     whyNow: row.why_now || "",
+    attributionType: row.attribution_type || "",
+    sourceStrengthScore: parseNumeric(row.source_strength_score) || 0,
+    exposurePurityScore: parseNumeric(row.exposure_purity_score) || 0,
+    paperSignalScore: parseNumeric(row.paper_signal_score) || 0,
+    noveltyScore: parseNumeric(row.novelty_score) || 0,
+    attentionScore: parseNumeric(row.sentiment_score) || 0,
+    financialConfirmationScore: parseNumeric(row.financial_confirmation_score) || 0,
+    marketSetupScore: parseNumeric(row.market_setup_score) || 0,
+    riskQualityScore: parseNumeric(row.risk_score) || 0,
     totalScore: parseNumeric(row.total_score) || 0,
     recommendation: row.recommendation || "",
     reviewStatus: row.review_status || "",
@@ -1711,6 +1720,17 @@ function discoveryPresenceLabel(value) {
   return labels[value] || value || "未标记";
 }
 
+function discoveryAttributionLabel(value) {
+  const labels = {
+    direct_official: "官方直接归因",
+    direct_news: "新闻直接归因",
+    confirmed_proxy: "业务/财务确认代理",
+    source_mapping: "源表映射",
+    theme_proxy: "主题代理"
+  };
+  return labels[value] || value || "归因待核实";
+}
+
 function discoveryScoreClass(score) {
   if (score >= 76) return "high";
   if (score >= 62) return "medium";
@@ -1741,7 +1761,8 @@ function renderThemeChips(value, limit = 4) {
 function renderCandidateDossier(candidate) {
   return `<div class="mini-research-card">
     <div><span>研究假设</span><p>${escapeHtml(truncateText(candidate.whyNow || candidate.theme || "由主动发现信号触发，需继续核实业务纯度。", 150))}</p></div>
-    <div><span>证据数量</span><p>${candidate.supportingSignals.length} 条信号 · ${candidate.supportingPapers.length} 篇论文 · 总分 ${Math.round(candidate.totalScore)}</p></div>
+    <div><span>证据与归因</span><p>${candidate.supportingSignals.length} 条信号 · ${candidate.supportingPapers.length} 篇论文 · ${escapeHtml(discoveryAttributionLabel(candidate.attributionType))}</p></div>
+    <div><span>评分拆解</span><p>来源 ${candidate.sourceStrengthScore} · 暴露 ${candidate.exposurePurityScore} · 论文 ${candidate.paperSignalScore} · 财务 ${candidate.financialConfirmationScore} · 市场 ${candidate.marketSetupScore} · 总分 ${Math.round(candidate.totalScore)}</p></div>
     <div><span>下一步</span><p>${candidate.poolPresence === "not_in_pool" || candidate.poolPresence === "out_of_pool" ? "先核实收入敞口、客户/产品证据和估值位置，再决定是否入正式池。" : "检查新信号是否强化原有入池逻辑，避免只因主题热度重复加权。"}</p></div>
   </div>`;
 }
@@ -1782,6 +1803,7 @@ function renderDiscoveryCandidateCard(candidate, compact = false) {
     <div class="discovery-meta-line">
       <span>${escapeHtml(discoveryRecommendationLabel(candidate.recommendation))}</span>
       <span>${escapeHtml(discoveryPresenceLabel(candidate.poolPresence))}</span>
+      <span>${escapeHtml(discoveryAttributionLabel(candidate.attributionType))}</span>
       <span>${escapeHtml(chainLayer)}</span>
       <span class="candidate-action-state ${candidateActionClass(actionValue)}">${escapeHtml(actionStatus)}</span>
     </div>

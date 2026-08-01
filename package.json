@@ -6,8 +6,9 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-static.mjs",
-    "test": "node --test cloudflare/worker.test.mjs",
+    "test": "node --test cloudflare/worker.test.mjs && python3 -m unittest discover -s tests -p 'test_*.py'",
     "validate:data": "node scripts/validate-data.mjs",
+    "validate:refresh": "node scripts/validate-refresh.mjs",
     "check": "npm run validate:data && npm run test && npm run build && node scripts/wrangler-dry-run.mjs",
     "deploy": "npm run build && wrangler deploy",
     "deploy:cloudflare": "npm run deploy"

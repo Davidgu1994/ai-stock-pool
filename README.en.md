@@ -168,6 +168,17 @@ npm run validate:data
 
 If signals and candidates unexpectedly collapse to empty tables, stop the release. This usually indicates a network-fetch failure, not an absence of market signals.
 
+### Daily automated refresh
+
+The repository includes `.github/workflows/daily-discovery.yml`. It runs every day at 16:17 Asia/Shanghai and can also be started manually from GitHub Actions. The workflow:
+
+1. fetches the latest seven days of official, news, arXiv, and market signals;
+2. generates the discovery CSVs and report, and maintains `discovery-history.csv`;
+3. runs tests, the static build, and snapshot-collapse guards;
+4. commits to the default branch only when validation passes and data changed.
+
+The current inputs require no extra API key; the workflow uses GitHub's built-in `GITHUB_TOKEN`. When the Vercel project is connected to this repository, a production-branch commit triggers deployment.
+
 ## Merge your own stock pools
 
 ```bash
@@ -177,7 +188,7 @@ python3 sync_pool.py \
   --output stock-pool.csv
 ```
 
-Without arguments, the script reads `美股股票池.csv` and `A股映射股票池.csv` from the parent directory.
+Without arguments, the script first looks for `美股股票池.csv` and `A股映射股票池.csv` in the parent directory. If those source tables are absent, active discovery reconstructs the mapping context from the committed `stock-pool.csv`, so GitHub Actions remains self-contained.
 
 The formal pool and the discovery layer are separate states. Discovery only emits research statuses such as `observe`, `already_in_pool`, and `reject`; it never promotes a candidate into the formal pool automatically.
 
@@ -205,7 +216,7 @@ Returns the policy-pressure score, six drivers, recent history, industry mapping
 | `discovery-signals.csv` | Official and news signals | Yes |
 | `arxiv-papers.csv` | arXiv paper signals | Yes |
 | `discovery-candidates.csv` | Candidate scores and review state | Yes |
-| `discovery-history.csv` | Daily discovery trend | Maintained after validation |
+| `discovery-history.csv` | Daily discovery trend | Maintained automatically by active discovery |
 | `tpi-latest.json` | Policy-pressure fallback snapshot | Maintained from valid snapshots |
 
 ## Repository layout

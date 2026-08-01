@@ -1,0 +1,84 @@
+name: Daily discovery refresh
+
+on:
+  schedule:
+    # 16:17 Asia/Shanghai. Avoid the top of the hour, when scheduled jobs are more likely to queue.
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: daily-discovery-refresh
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --requirement requirements.txt
+          npm ci
+
+      - name: Resolve report date
+        id: report_date
+        run: echo "value=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Refresh discovery snapshots
+        run: |
+          python discovery_engine.py \
+            --fresh \
+            --days 7 \
+            --max-arxiv-results 8 \
+            --max-feed-items 15 \
+            --max-extra-quotes 40 \
+            --arxiv-delay 3 \
+            --report-date "${{ steps.report_date.outputs.value }}"
+
+      - name: Validate application and refresh
+        env:
+          DISCOVERY_REPORT_DATE: ${{ steps.report_date.outputs.value }}
+        run: |
+          npm run check
+          npm run validate:refresh
+
+      - name: Commit refreshed snapshots
+        env:
+          GIT_AUTHOR_NAME: ${{ github.actor }}
+          GIT_AUTHOR_EMAIL: ${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com
+          REPORT_DATE: ${{ steps.report_date.outputs.value }}
+        run: |
+          git config user.name "$GIT_AUTHOR_NAME"
+          git config user.email "$GIT_AUTHOR_EMAIL"
+          git add \
+            discovery-signals.csv \
+            arxiv-papers.csv \
+            discovery-candidates.csv \
+            discovery-history.csv \
+            "reports/discovery-${REPORT_DATE}.md"
+          if git diff --cached --quiet; then
+            echo "No discovery changes to commit"
+            exit 0
+          fi
+          git commit -m "Refresh discovery data for ${REPORT_DATE}"
+          git push
